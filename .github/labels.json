@@ -1,0 +1,67 @@
+[
+  {
+    "name": "area:gameplay",
+    "color": "1D76DB",
+    "description": "Lógica de piezas, colisiones, rotación, lock/merge/clear/spawn (game.js)"
+  },
+  {
+    "name": "area:rendering",
+    "color": "5319E7",
+    "description": "Dibujo en canvas: draw(), drawNext(), ghost piece, colores"
+  },
+  {
+    "name": "area:input",
+    "color": "0E8A16",
+    "description": "Controles de teclado: movimiento, rotación, soft/hard drop, pausa"
+  },
+  {
+    "name": "area:scoring",
+    "color": "FBCA04",
+    "description": "Puntaje, niveles y velocidad de caída (dropInterval)"
+  },
+  {
+    "name": "area:ui",
+    "color": "C2E0C6",
+    "description": "HTML/CSS: layout, textos, estilos, elementos visuales fuera del canvas"
+  },
+  {
+    "name": "type:bug",
+    "color": "D73A4A",
+    "description": "Algo no funciona como se espera"
+  },
+  {
+    "name": "type:feature",
+    "color": "A2EEEF",
+    "description": "Nueva funcionalidad o mejora"
+  },
+  {
+    "name": "type:refactor",
+    "color": "CFD3D7",
+    "description": "Mejora interna sin cambiar comportamiento observable"
+  },
+  {
+    "name": "type:docs",
+    "color": "0075CA",
+    "description": "Documentación (README, CLAUDE.md, comentarios)"
+  },
+  {
+    "name": "complexity:low",
+    "color": "C5DEF5",
+    "description": "Cambio pequeño y acotado, bajo riesgo"
+  },
+  {
+    "name": "complexity:medium",
+    "color": "BFD4F2",
+    "description": "Cambio de tamaño moderado, toca más de un punto del código"
+  },
+  {
+    "name": "complexity:high",
+    "color": "0052CC",
+    "description": "Cambio grande o riesgoso, puede afectar múltiples sistemas del juego"
+  },
+  {
+    "name": "needs-info",
+    "color": "E4E669",
+    "description": "Falta información para poder diagnosticar o implementar el issue"
+  }
+]

@@ -230,7 +230,11 @@ function readThemeColors() {
 
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // localStorage puede fallar en navegación privada (p. ej. Safari); el tema no persiste pero el juego sigue funcionando
+  }
   themeToggleBtn.setAttribute('aria-pressed', String(theme === 'light'));
   themeToggleBtn.textContent = theme === 'light' ? '☀️' : '🌙';
   themeToggleBtn.setAttribute('aria-label', theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
@@ -244,8 +248,39 @@ function toggleTheme() {
   setTheme(isLight ? 'dark' : 'light');
 }
 
+function moveLeft() {
+  if (paused || gameOver) return;
+  if (!collide(current.shape, current.x - 1, current.y)) current.x--;
+  updateHUD();
+}
+
+function moveRight() {
+  if (paused || gameOver) return;
+  if (!collide(current.shape, current.x + 1, current.y)) current.x++;
+  updateHUD();
+}
+
+function rotate() {
+  if (paused || gameOver) return;
+  tryRotate();
+  updateHUD();
+}
+
+function doSoftDrop() {
+  if (paused || gameOver) return;
+  softDrop();
+  updateHUD();
+}
+
+function doHardDrop() {
+  if (paused || gameOver) return;
+  hardDrop();
+  updateHUD();
+}
+
 function endGame() {
   gameOver = true;
+  stopRepeat();
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
@@ -259,6 +294,7 @@ function togglePause() {
     lastTime = performance.now();
     loop(lastTime);
   } else {
+    stopRepeat();
     cancelAnimationFrame(animId);
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
@@ -306,28 +342,74 @@ document.addEventListener('keydown', e => {
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
-      if (!collide(current.shape, current.x - 1, current.y)) current.x--;
+      moveLeft();
       break;
     case 'ArrowRight':
-      if (!collide(current.shape, current.x + 1, current.y)) current.x++;
+      moveRight();
       break;
     case 'ArrowDown':
-      softDrop();
+      doSoftDrop();
       break;
     case 'ArrowUp':
     case 'KeyX':
-      tryRotate();
+      rotate();
       break;
     case 'Space':
       e.preventDefault();
-      hardDrop();
+      doHardDrop();
       break;
   }
-  updateHUD();
 });
 
 restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
 
-setTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
+// --- Controles táctiles ---
+const REPEAT_DELAY = 250;
+const REPEAT_INTERVAL = 100;
+let repeatTimeout = null;
+let repeatInterval = null;
+
+function stopRepeat() {
+  clearTimeout(repeatTimeout);
+  clearInterval(repeatInterval);
+  repeatTimeout = null;
+  repeatInterval = null;
+}
+
+function startRepeat(action) {
+  stopRepeat();
+  action();
+  repeatTimeout = setTimeout(() => {
+    repeatInterval = setInterval(action, REPEAT_INTERVAL);
+  }, REPEAT_DELAY);
+}
+
+function bindTouchButton(id, action, { repeat } = {}) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (repeat) startRepeat(action);
+    else action();
+  });
+  if (repeat) {
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(evt =>
+      btn.addEventListener(evt, stopRepeat)
+    );
+  }
+}
+
+bindTouchButton('touch-left', moveLeft, { repeat: true });
+bindTouchButton('touch-right', moveRight, { repeat: true });
+bindTouchButton('touch-down', doSoftDrop, { repeat: true });
+bindTouchButton('touch-rotate', rotate);
+bindTouchButton('touch-hard-drop', doHardDrop);
+bindTouchButton('touch-pause', togglePause);
+
+try {
+  setTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
+} catch {
+  setTheme('dark');
+}
 init();

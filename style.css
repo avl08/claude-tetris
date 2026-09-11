@@ -50,7 +50,9 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   user-select: none;
+  padding: 12px;
 }
 
 .wrapper {
@@ -112,6 +114,8 @@ body {
   background: var(--board-bg);
   border-radius: 4px;
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ---- Panel lateral ---- */
@@ -230,4 +234,90 @@ kbd {
 
 #restart-btn:hover {
   background: var(--accent-hover);
+}
+
+/* ---- Controles táctiles ---- */
+#touch-controls {
+  display: none;
+  width: 100%;
+  max-width: 300px;
+  margin-top: 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.touch-group {
+  display: flex;
+  gap: 10px;
+}
+
+#touch-controls button {
+  background: var(--board-bg);
+  color: var(--fg);
+  border: 1px solid var(--board-border);
+  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+#touch-controls button:active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+@media (max-width: 600px), (pointer: coarse) {
+  #touch-controls {
+    display: flex;
+  }
+
+  .controls {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 8px;
+  }
+
+  .game-title {
+    font-size: 24px;
+    letter-spacing: 4px;
+  }
+
+  .game-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #board {
+    width: 100%;
+    max-width: 300px;
+    height: auto;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 300px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .panel-section {
+    gap: 2px;
+  }
+
+  #next-canvas {
+    width: 60px;
+    height: 60px;
+  }
 }

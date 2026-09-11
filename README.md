@@ -86,6 +86,8 @@ Después abre `http://localhost:8000` en el navegador.
 | `Espacio` | Hard drop (caída instantánea)     |
 | `P`       | Pausar / reanudar                 |
 
+En móvil (Safari, Chrome, Firefox) se muestra automáticamente un panel de botones táctiles equivalente: ◀ / ▶ para mover, ⟳ para rotar, ▽ para soft drop, ⤓ para hard drop y ❚❚ para pausa. Mantener pulsado ◀, ▶ o ▽ repite la acción.
+
 ---
 
 ## Cómo funciona

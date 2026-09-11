@@ -1,0 +1,156 @@
+name: Claude Issue Triage
+
+# Analiza automáticamente los issues (al crearse o editarse), les aplica
+# labels del proyecto y publica un diagnóstico técnico como insumo para
+# la implementación posterior. No modifica código ni abre PRs.
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Número de issue a re-analizar (para pruebas)"
+        required: true
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # necesario para aplicar labels y comentar
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sincronizar labels del proyecto
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          jq -c '.[]' .github/labels.json | while read -r label; do
+            name=$(echo "$label" | jq -r '.name')
+            color=$(echo "$label" | jq -r '.color')
+            description=$(echo "$label" | jq -r '.description')
+            gh label create "$name" --color "$color" --description "$description" --force
+          done
+
+      - name: Determinar número de issue
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Analizar issue con Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Mismo secret ya configurado en GitHub y usado por los otros
+          # dos workflows (claude.yml y claude-code-review.yml).
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Vas a diagnosticar y clasificar el issue #${{ steps.issue.outputs.number }}
+            del repositorio ${{ github.repository }}. Este es un workflow de
+            triage automático: tu trabajo es ANALIZAR, no implementar. No
+            modifiques código, no crees ramas ni pull requests, no crees
+            labels nuevas ni edites el cuerpo del issue.
+
+            Pasos a seguir:
+
+            1. Lee el issue completo:
+               `gh issue view ${{ steps.issue.outputs.number }} --json number,title,body,labels,comments`
+
+            2. Lee `CLAUDE.md` en la raíz del repo para entender la
+               arquitectura del proyecto (Tetris en JS vanilla, un solo
+               archivo `game.js`, sin build ni tests automatizados).
+
+            3. Explora el código relevante (`game.js`, `index.html`,
+               `style.css`) con las herramientas Read/Grep/Glob para
+               localizar las funciones y líneas concretas que el issue
+               afecta (por ejemplo `lockPiece`, `merge`, `clearLines`,
+               `spawn`, `tryRotate`, `rotateCW`, `collide`, `draw`,
+               `drawNext`, `ghostY`, el listener de `keydown`, las
+               constantes `COLS`/`ROWS`/`BLOCK`/`COLORS`/`LINE_SCORES`).
+               No asumas nada: cita código real que hayas leído.
+
+            4. Lee las labels disponibles del repo:
+               `gh label list --json name,description`
+               Elige labels **solo** de esa lista, siguiendo estas reglas:
+               - Exactamente un label `type:` (bug, feature, refactor, docs)
+               - Exactamente un label `complexity:` (low, medium, high)
+               - Uno o más labels `area:` (gameplay, rendering, input,
+                 scoring, ui) según el código afectado
+               - `needs-info` únicamente si el issue no trae información
+                 suficiente para diagnosticar con confianza (en ese caso
+                 puede ser el único label junto con `type:`)
+               No inventes ni crees labels que no estén en la lista.
+
+            5. Aplica las labels elegidas:
+               `gh issue edit ${{ steps.issue.outputs.number }} --add-label "label1,label2,..."`
+
+            6. Publica el diagnóstico como comentario en el issue, en
+               **español**, con este formato exacto (usa Markdown):
+
+               <!-- claude-triage -->
+               ## 🔍 Diagnóstico automático
+
+               **Resumen**
+               (1-2 frases de qué pide o reporta el issue)
+
+               **Comportamiento actual vs. esperado**
+               (solo si es un bug; omite esta sección si no aplica)
+
+               **Código afectado**
+               (archivos y funciones concretas, con referencias tipo
+               `game.js:123`, citando las funciones/constantes reales
+               que revisaste — no descripciones vagas)
+
+               **Causa probable / enfoque propuesto**
+               (explicación técnica breve)
+
+               **Plan de implementación**
+               1. (pasos numerados, concretos, del tamaño de un PR)
+
+               **Riesgos y efectos colaterales**
+               (menciona explícitamente que si se cambian `COLS`, `ROWS`
+               o `BLOCK` hay que actualizar el `width`/`height` del
+               `<canvas id="board">` en `index.html`, cuando aplique)
+
+               **Cómo verificar**
+               (pasos manuales en el navegador — el repo no tiene tests
+               automatizados; se puede servir con
+               `python3 -m http.server 8000`)
+
+               **Información faltante**
+               (solo si aplicaste el label `needs-info`)
+
+               **Labels aplicadas**
+               (lista final de labels que aplicaste)
+
+               Para publicar el comentario:
+               1. Escribe el cuerpo completo del diagnóstico con la
+                  herramienta Write en un archivo temporal, por ejemplo
+                  `/tmp/triage-comment.md`.
+               2. Busca si ya existe un comentario tuyo anterior en este
+                  issue que empiece con `<!-- claude-triage -->` usando
+                  `gh issue view ${{ steps.issue.outputs.number }} --json comments`.
+               3. Si existe, actualízalo (comportamiento sticky) con:
+                  `gh api -X PATCH /repos/${{ github.repository }}/issues/comments/<id> -F body=@/tmp/triage-comment.md`
+               4. Si no existe, crea uno nuevo con:
+                  `gh issue comment ${{ steps.issue.outputs.number }} --body-file /tmp/triage-comment.md`
+
+               El resultado debe ser un único comentario de diagnóstico
+               por issue que se actualiza, no uno nuevo en cada edición.
+          claude_args: |
+            --max-turns 25
+            --model claude-opus-5
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh label list:*),Bash(gh api:*)"

@@ -22,8 +22,8 @@ Then visit `http://localhost:8000`. To verify a change, open the page in a brows
 
 All game logic lives in `game.js` (~300 lines, single file, no modules). Key pieces:
 
-- **Board model**: `board` is a `ROWS × COLS` matrix; each cell is `0` (empty) or a piece-color index `1–7`.
-- **Pieces**: `PIECES` defines the 7 tetrominoes as square matrices. `rotateCW` rotates via transpose + row-reverse. `tryRotate` applies `rotateCW` then attempts wall kicks (`[0, -1, 1, -2, 2]` column offsets) until a non-colliding position is found.
+- **Board model**: `board` is a `ROWS × COLS` matrix; each cell is `0` (empty) or a piece-color index `1–8`.
+- **Pieces**: `PIECES` defines the 7 classic tetrominoes plus an 8th challenge piece — a 3×3 "nut" ring (`[[8,8,8],[8,0,8],[8,8,8]]`) with an unfillable hollow center — as square matrices. `randomPiece` picks uniformly among all 8. `rotateCW` rotates via transpose + row-reverse (a no-op for the symmetric nut). `tryRotate` applies `rotateCW` then attempts wall kicks (`[0, -1, 1, -2, 2]` column offsets) until a non-colliding position is found.
 - **Collision**: `collide(shape, ox, oy)` checks bounds and overlap against `board`; used for movement, rotation, ghost-piece projection, and drop-lock detection.
 - **Game loop**: `loop(ts)` runs via `requestAnimationFrame`, accumulating elapsed time (`dropAccum`) against `dropInterval`; when exceeded, the piece drops one row or locks (`lockPiece`) if blocked.
 - **Locking a piece**: `lockPiece` → `merge` (writes piece into `board`) → `clearLines` (removes full rows, shifts down, updates score/level/speed) → `spawn` (promotes `next` to `current`, generates new `next`, checks game-over via immediate collision).

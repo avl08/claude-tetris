@@ -148,10 +148,10 @@ function lockPiece() {
 function spawn() {
   current = next;
   next = randomPiece();
+  drawNext();
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
-  drawNext();
 }
 
 function updateHUD() {
@@ -197,6 +197,8 @@ function draw() {
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
       drawBlock(ctx, c, r, board[r][c], BLOCK);
+
+  if (gameOver) return; // la pieza que colisionó no se dibuja sobre la pila
 
   // ghost
   const gy = ghostY();
@@ -282,6 +284,8 @@ function endGame() {
   gameOver = true;
   stopRepeat();
   cancelAnimationFrame(animId);
+  animId = null;
+  draw(); // frame final: solo el tablero, sin la pieza que colisionó
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -303,6 +307,7 @@ function togglePause() {
 }
 
 function loop(ts) {
+  if (gameOver || paused) { animId = null; return; }
   const dt = ts - lastTime;
   lastTime = ts;
   dropAccum += dt;
@@ -314,6 +319,7 @@ function loop(ts) {
       lockPiece();
     }
   }
+  if (gameOver) return; // lockPiece() terminó la partida; endGame() ya dibujó el frame final
   draw();
   animId = requestAnimationFrame(loop);
 }

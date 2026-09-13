@@ -37,25 +37,159 @@ const nextCtx = nextCanvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
+const comboEl = document.getElementById('combo');
+const nextLabelEl = document.getElementById('next-label');
+const freezeSection = document.getElementById('freeze-section');
+const freezeValueEl = document.getElementById('freeze-value');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const soundToggleBtn = document.getElementById('sound-toggle');
+const helpToggleBtn = document.getElementById('help-toggle');
+const helpCloseBtn = document.getElementById('help-close');
+const helpModal = document.getElementById('help-modal');
+const modeClassicBtn = document.getElementById('mode-classic-btn');
+const modeFullBtn = document.getElementById('mode-full-btn');
 
 const THEME_STORAGE_KEY = 'tetris-theme';
-const themeColors = { gridLine: '', blockHighlight: '' };
+const MODE_STORAGE_KEY = 'tetris-mode';
+const themeColors = { gridLine: '', blockHighlight: '', comodin: '' };
+let gameMode = 'full'; // 'classic' | 'full'
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, next, score, lines, level, combo, freezeRemaining,
+  paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 8) + 1;
+  const type = Math.floor(Math.random() * (PIECES.length - 1)) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
+}
+
+function makePowerUpPiece(powerUp) {
+  return { type: powerUp.code, shape: [[powerUp.code]], x: Math.floor(COLS / 2), y: 0, powerUp };
+}
+
+function nextPiece() {
+  const powerUp = PowerUpSpawner.takePowerUp(powerUpContext);
+  return powerUp ? makePowerUpPiece(powerUp) : randomPiece();
+}
+
+// --- Primitivas de tablero para el sistema de power-ups (powerups.js) ---
+
+function isInside(x, y) {
+  return x >= 0 && x < COLS && y >= 0 && y < ROWS;
+}
+
+function getCell(x, y) {
+  return isInside(x, y) ? board[y][x] : 0;
+}
+
+function setCell(x, y, v) {
+  if (isInside(x, y)) board[y][x] = v;
+}
+
+function clearCell(x, y) {
+  setCell(x, y, 0);
+}
+
+function forEachCell(fn) {
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++)
+      fn(x, y, board[y][x]);
+}
+
+function colorHex(index) {
+  return COLORS[index];
+}
+
+function addScore(points) {
+  score += points;
+  updateHUD();
+}
+
+function getLevel() {
+  return level;
+}
+
+function freeze(ms) {
+  freezeRemaining = ms;
+  Effects.removeType(FreezeOverlayEffect);
+  Effects.spawn(new FreezeOverlayEffect(ms, COLS, ROWS));
+}
+
+// Compacta cada columna hacia abajo preservando el orden relativo de sus
+// bloques; devuelve cuántas celdas se movieron y de dónde, para el efecto visual.
+function applyGravity() {
+  let count = 0;
+  const streaks = [];
+  for (let x = 0; x < COLS; x++) {
+    const values = [];
+    for (let y = 0; y < ROWS; y++) {
+      const v = board[y][x];
+      if (v) values.push({ origY: y, v });
+    }
+    for (let y = 0; y < ROWS; y++) board[y][x] = 0;
+    let writeY = ROWS - 1;
+    for (let i = values.length - 1; i >= 0; i--) {
+      const { origY, v } = values[i];
+      board[writeY][x] = v;
+      if (writeY !== origY) {
+        count++;
+        streaks.push({ x, y: writeY, dist: writeY - origY });
+      }
+      writeY--;
+    }
+  }
+  return { count, streaks };
+}
+
+// Fuerza la eliminación de una fila concreta (no tiene por qué estar llena),
+// con la misma contabilidad de puntuación/nivel que una línea normal.
+function clearRow(y) {
+  const comodines = board[y].filter(v => v === 9).length;
+  board.splice(y, 1);
+  board.unshift(new Array(COLS).fill(0));
+  applyLinesCleared(1, comodines);
+  return 1;
+}
+
+// Vacía una columna entera (destrucción, no cuenta como línea limpiada).
+function clearColumn(x) {
+  let destroyed = 0;
+  for (let y = 0; y < ROWS; y++) {
+    if (board[y][x]) { board[y][x] = 0; destroyed++; }
+  }
+  return destroyed;
+}
+
+const powerUpContext = {
+  ROWS, COLS,
+  getCell, setCell, clearCell, isInside, forEachCell,
+  clearRow, clearColumn, applyGravity,
+  addScore, getLevel, colorHex, freeze,
+  effects: Effects, sfx: Sfx,
+};
+
+function activatePowerUp(piece) {
+  const instance = piece.powerUp;
+  if (instance.consumesSelf) clearCell(piece.x, piece.y);
+  return instance.activate(piece.x, piece.y) || 0;
+}
+
+function registerCombo(clearedCount) {
+  if (clearedCount > 0) {
+    combo++;
+    if (combo > 1) score += 50 * (combo - 1) * level;
+  } else {
+    combo = 0;
+  }
+  updateHUD();
 }
 
 function collide(shape, ox, oy) {
@@ -99,23 +233,43 @@ function merge() {
         board[current.y + r][current.x + c] = current.shape[r][c];
 }
 
+// Una fila se limpia si cada hueco está cubierto por un comodín (el caso
+// normal, sin comodines, exige que no haya ningún hueco).
+function isRowClearable(row) {
+  let gaps = 0, wilds = 0;
+  for (const v of row) {
+    if (v === 0) gaps++;
+    else if (v === 9) wilds++;
+  }
+  return gaps <= wilds;
+}
+
+function applyLinesCleared(count, comodines = 0) {
+  lines += count;
+  // Con comodines varias filas pueden completarse a la vez fuera de las 1-4
+  // habituales de una pieza normal; LINE_SCORES sólo cubre hasta 4.
+  const base = (LINE_SCORES[Math.min(count, 4)] || 0) * level;
+  const bonus = comodines > 0 ? Math.round(base * 0.5 * comodines) : 0;
+  score += base + bonus;
+  level = Math.floor(lines / 10) + 1;
+  dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+  updateHUD();
+}
+
 function clearLines() {
   let cleared = 0;
+  let comodines = 0;
   for (let r = ROWS - 1; r >= 0; r--) {
-    if (board[r].every(v => v !== 0)) {
+    if (isRowClearable(board[r])) {
+      comodines += board[r].filter(v => v === 9).length;
       board.splice(r, 1);
       board.unshift(new Array(COLS).fill(0));
       cleared++;
       r++;
     }
   }
-  if (cleared) {
-    lines += cleared;
-    score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
-    updateHUD();
-  }
+  if (cleared) applyLinesCleared(cleared, comodines);
+  return { cleared, comodines };
 }
 
 function ghostY() {
@@ -143,13 +297,18 @@ function softDrop() {
 
 function lockPiece() {
   merge();
-  clearLines();
+  PowerUpSpawner.onPiecePlaced();
+  const puLines = current.powerUp ? activatePowerUp(current) : 0;
+  const { cleared } = clearLines();
+  const totalCleared = puLines + cleared;
+  registerCombo(totalCleared);
+  PowerUpSpawner.onLinesCleared(totalCleared);
   spawn();
 }
 
 function spawn() {
   current = next;
-  next = randomPiece();
+  next = nextPiece();
   drawNext();
   if (collide(current.shape, current.x, current.y)) {
     endGame();
@@ -160,17 +319,49 @@ function updateHUD() {
   scoreEl.textContent = score.toLocaleString();
   linesEl.textContent = lines;
   levelEl.textContent = level;
+  comboEl.textContent = combo > 1 ? `x${combo}` : '—';
+  if (freezeRemaining > 0) {
+    freezeSection.classList.remove('hidden');
+    freezeValueEl.textContent = `${Math.ceil(freezeRemaining / 1000)}s`;
+  } else {
+    freezeSection.classList.add('hidden');
+  }
 }
 
-function drawBlock(context, x, y, colorIndex, size, alpha) {
+// Decodifica una celda del tablero: 1-8 color normal, 9 comodín (Tinte),
+// 100+n celda de power-up. `puInstance` (opcional) es la instancia real de
+// la pieza que está cayendo, para que cada power-up (p. ej. el color que
+// eligió el Tinte) se pinte con su estado real en vez de un valor genérico.
+function resolveCell(v, puInstance) {
+  if (v >= 100) {
+    if (puInstance) return { fill: puInstance.color, glyph: puInstance.glyph };
+    return PowerUps.styleFor(v - 100);
+  }
+  if (v === 9) return { fill: themeColors.comodin, glyph: '✦' };
+  return { fill: COLORS[v], glyph: null };
+}
+
+function drawBlock(context, x, y, colorIndex, size, alpha, puInstance) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  const style = resolveCell(colorIndex, puInstance);
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
+  context.fillStyle = style.fill;
   context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
   // highlight
   context.fillStyle = themeColors.blockHighlight;
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (style.glyph) {
+    const cx = x * size + size / 2;
+    const cy = y * size + size / 2 + 1;
+    context.font = `${Math.floor(size * 0.55)}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.lineWidth = 2;
+    context.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    context.strokeText(style.glyph, cx, cy);
+    context.fillStyle = '#fff';
+    context.fillText(style.glyph, cx, cy);
+  }
   context.globalAlpha = 1;
 }
 
@@ -193,6 +384,10 @@ function drawGrid() {
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  const shakeOffset = Effects.getShakeOffset();
+  ctx.translate(shakeOffset.x, shakeOffset.y);
+
   drawGrid();
 
   // board
@@ -200,36 +395,42 @@ function draw() {
     for (let c = 0; c < COLS; c++)
       drawBlock(ctx, c, r, board[r][c], BLOCK);
 
-  if (gameOver) return; // la pieza que colisionó no se dibuja sobre la pila
+  if (!gameOver) { // la pieza que colisionó no se dibuja sobre la pila
+    // ghost
+    const gy = ghostY();
+    for (let r = 0; r < current.shape.length; r++)
+      for (let c = 0; c < current.shape[r].length; c++)
+        if (current.shape[r][c])
+          drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2, current.powerUp);
 
-  // ghost
-  const gy = ghostY();
-  for (let r = 0; r < current.shape.length; r++)
-    for (let c = 0; c < current.shape[r].length; c++)
-      if (current.shape[r][c])
-        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
+    // current piece
+    for (let r = 0; r < current.shape.length; r++)
+      for (let c = 0; c < current.shape[r].length; c++)
+        drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK, undefined, current.powerUp);
+  }
 
-  // current piece
-  for (let r = 0; r < current.shape.length; r++)
-    for (let c = 0; c < current.shape[r].length; c++)
-      drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+  Effects.draw(ctx, BLOCK);
+  ctx.restore();
 }
 
 function drawNext() {
   const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
   const shape = next.shape;
-  const offX = Math.floor((4 - shape[0].length) / 2);
-  const offY = Math.floor((4 - shape.length) / 2);
+  const single = shape.length === 1 && shape[0].length === 1;
+  const offX = single ? 1.5 : Math.floor((4 - shape[0].length) / 2);
+  const offY = single ? 1.5 : Math.floor((4 - shape.length) / 2);
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
-      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
+      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, undefined, next.powerUp);
+  nextLabelEl.textContent = next.powerUp ? next.powerUp.label : '';
 }
 
 function readThemeColors() {
   const styles = getComputedStyle(document.documentElement);
   themeColors.gridLine = styles.getPropertyValue('--grid-line').trim();
   themeColors.blockHighlight = styles.getPropertyValue('--block-highlight').trim();
+  themeColors.comodin = styles.getPropertyValue('--comodin').trim();
 }
 
 function setTheme(theme) {
@@ -250,6 +451,19 @@ function setTheme(theme) {
 function toggleTheme() {
   const isLight = document.documentElement.dataset.theme === 'light';
   setTheme(isLight ? 'dark' : 'light');
+}
+
+function setMode(mode, { restart = true } = {}) {
+  gameMode = mode === 'classic' ? 'classic' : 'full';
+  try {
+    localStorage.setItem(MODE_STORAGE_KEY, gameMode);
+  } catch {
+    // ver comentario de arriba sobre localStorage en navegación privada
+  }
+  PowerUpSpawner.config.enabled = gameMode === 'full';
+  modeClassicBtn.setAttribute('aria-pressed', String(gameMode === 'classic'));
+  modeFullBtn.setAttribute('aria-pressed', String(gameMode === 'full'));
+  if (restart) init();
 }
 
 function moveLeft() {
@@ -285,9 +499,10 @@ function doHardDrop() {
 function endGame() {
   gameOver = true;
   stopRepeat();
-  cancelAnimationFrame(animId);
-  animId = null;
-  draw(); // frame final: solo el tablero, sin la pieza que colisionó
+  freezeRemaining = 0;
+  // No se cancela el rAF: el bucle sigue vivo para que un efecto en curso
+  // (p. ej. la explosión de una Bomba) termine de animarse tras el game over.
+  draw(); // frame final inmediato: sin la pieza que colisionó
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
@@ -297,6 +512,7 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    overlay.classList.add('hidden');
     lastTime = performance.now();
     loop(lastTime);
   } else {
@@ -309,20 +525,37 @@ function togglePause() {
 }
 
 function loop(ts) {
-  if (gameOver || paused) { animId = null; return; }
-  const dt = ts - lastTime;
+  const dt = Math.min(ts - lastTime, 100); // acota saltos grandes (pestaña en segundo plano)
   lastTime = ts;
-  dropAccum += dt;
-  if (dropAccum >= dropInterval) {
-    dropAccum = 0;
-    if (!collide(current.shape, current.x, current.y + 1)) {
-      current.y++;
+
+  if (!paused && !gameOver) {
+    if (freezeRemaining > 0) {
+      freezeRemaining = Math.max(0, freezeRemaining - dt);
+      if (freezeRemaining < 1) freezeRemaining = 0; // evita residuos de punto flotante casi-cero
+      dropAccum = 0; // evita una caída instantánea al descongelar
     } else {
-      lockPiece();
+      dropAccum += dt;
+      if (dropAccum >= dropInterval) {
+        dropAccum = 0;
+        if (!collide(current.shape, current.x, current.y + 1)) {
+          current.y++;
+        } else {
+          lockPiece(); // puede fijar gameOver = true (spawn() -> endGame())
+        }
+      }
     }
   }
-  if (gameOver) return; // lockPiece() terminó la partida; endGame() ya dibujó el frame final
+
+  updateHUD();
+  Effects.update(dt);
   draw();
+
+  // En pausa, el bucle se detiene siempre (togglePause() ya cancela el
+  // frame pendiente; esto es un cierre defensivo por si este tick sigue
+  // corriendo). En game over sí dejamos que un efecto en curso (p. ej. la
+  // explosión de una Bomba) termine de animarse antes de parar del todo.
+  if (paused) { animId = null; return; }
+  if (gameOver && !Effects.active()) { animId = null; return; }
   animId = requestAnimationFrame(loop);
 }
 
@@ -331,12 +564,16 @@ function init() {
   score = 0;
   lines = 0;
   level = 1;
+  combo = 0;
+  freezeRemaining = 0;
   paused = false;
   gameOver = false;
   dropInterval = 1000;
   dropAccum = 0;
   lastTime = performance.now();
-  next = randomPiece();
+  PowerUpSpawner.reset();
+  Effects.clear();
+  next = nextPiece();
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
@@ -344,8 +581,40 @@ function init() {
   animId = requestAnimationFrame(loop);
 }
 
+// --- Modal de ayuda ---
+let helpCausedPause = false;
+
+function isHelpOpen() {
+  return !helpModal.classList.contains('hidden');
+}
+
+function openHelp() {
+  if (!paused && !gameOver) {
+    paused = true;
+    stopRepeat();
+    cancelAnimationFrame(animId);
+    animId = null;
+    helpCausedPause = true;
+  }
+  helpModal.classList.remove('hidden');
+}
+
+function closeHelp() {
+  helpModal.classList.add('hidden');
+  if (helpCausedPause) {
+    helpCausedPause = false;
+    paused = false;
+    lastTime = performance.now();
+    loop(lastTime);
+  }
+}
+
 document.addEventListener('keydown', e => {
   if (e.target instanceof HTMLButtonElement) return;
+  if (isHelpOpen()) {
+    if (e.code === 'Escape') closeHelp();
+    return;
+  }
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -371,6 +640,28 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
+
+helpToggleBtn.addEventListener('click', openHelp);
+helpCloseBtn.addEventListener('click', closeHelp);
+helpModal.addEventListener('click', e => {
+  if (e.target === helpModal) closeHelp(); // clic fuera de la caja de contenido
+});
+
+modeClassicBtn.addEventListener('click', () => setMode('classic'));
+modeFullBtn.addEventListener('click', () => setMode('full'));
+
+function updateSoundButton() {
+  const muted = Sfx.isMuted();
+  soundToggleBtn.setAttribute('aria-pressed', String(!muted));
+  soundToggleBtn.textContent = muted ? '🔇' : '🔊';
+  soundToggleBtn.setAttribute('aria-label', muted ? 'Activar sonido' : 'Silenciar sonido');
+}
+
+soundToggleBtn.addEventListener('click', () => {
+  Sfx.setMuted(!Sfx.isMuted());
+  updateSoundButton();
+});
+updateSoundButton();
 
 // --- Controles táctiles ---
 const REPEAT_DELAY = 250;
@@ -419,5 +710,10 @@ try {
   setTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
 } catch {
   setTheme('dark');
+}
+try {
+  setMode(localStorage.getItem(MODE_STORAGE_KEY) === 'classic' ? 'classic' : 'full', { restart: false });
+} catch {
+  setMode('full', { restart: false });
 }
 init();

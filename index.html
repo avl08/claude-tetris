@@ -10,8 +10,16 @@
   <div class="wrapper">
     <div class="title-row">
       <h1 class="game-title">TETRIS</h1>
-      <button id="theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a modo claro">🌙</button>
+      <button id="help-toggle" class="icon-btn" type="button" aria-label="Cómo jugar / reglas">❓</button>
+      <button id="sound-toggle" class="icon-btn" type="button" aria-pressed="true" aria-label="Silenciar sonido">🔊</button>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-pressed="false" aria-label="Cambiar a modo claro">🌙</button>
     </div>
+
+    <div class="mode-row" role="group" aria-label="Modo de juego">
+      <button id="mode-classic-btn" class="mode-btn" type="button" aria-pressed="false">CLÁSICO</button>
+      <button id="mode-full-btn" class="mode-btn" type="button" aria-pressed="true">COMPLETO</button>
+    </div>
+
     <div class="game-container">
       <canvas id="board" width="300" height="600"></canvas>
 
@@ -30,8 +38,19 @@
         </div>
 
         <div class="panel-section">
+          <span class="label">COMBO</span>
+          <span class="value" id="combo">—</span>
+        </div>
+
+        <div class="panel-section hidden" id="freeze-section">
+          <span class="label">CONGELADO</span>
+          <span class="value" id="freeze-value">5s</span>
+        </div>
+
+        <div class="panel-section">
           <span class="label">NEXT</span>
           <canvas id="next-canvas" width="120" height="120"></canvas>
+          <span class="powerup-label" id="next-label"></span>
         </div>
 
         <div class="panel-section controls">
@@ -67,8 +86,55 @@
         <button id="restart-btn">Reiniciar</button>
       </div>
     </div>
+
+    <div id="help-modal" class="overlay hidden">
+      <div class="help-box">
+        <div class="help-header">
+          <h2>Cómo jugar</h2>
+          <button id="help-close" class="icon-btn" type="button" aria-label="Cerrar ayuda">✕</button>
+        </div>
+
+        <div class="help-body">
+          <section>
+            <h3>Controles</h3>
+            <ul class="help-controls">
+              <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+              <li><kbd>↑</kbd> / <kbd>X</kbd> rotar</li>
+              <li><kbd>↓</kbd> bajada suave</li>
+              <li><kbd>Space</kbd> caída instantánea</li>
+              <li><kbd>P</kbd> pausa</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>Puntuación</h3>
+            <p>Limpiar 1, 2, 3 o 4 líneas a la vez otorga 100 / 300 / 500 / 800 puntos × nivel. El hard drop suma 2 puntos por celda de caída y el soft drop 1 punto por fila. Limpiar líneas en locks consecutivos acumula un <strong>combo</strong> que añade una bonificación extra. El nivel sube cada 10 líneas y acelera la caída.</p>
+          </section>
+
+          <section>
+            <h3>Modo Clásico vs. Completo</h3>
+            <p><strong>Completo</strong> añade power-ups aleatorios al mazo de piezas. <strong>Clásico</strong> es el Tetris de siempre, sin power-ups. Se puede cambiar con los botones bajo el título; cambiar de modo reinicia la partida.</p>
+          </section>
+
+          <section>
+            <h3>Power-ups (modo Completo)</h3>
+            <p>De vez en cuando, en lugar de una pieza normal cae una pieza especial de 1×1 que se activa al fijarse en el tablero:</p>
+            <ul class="help-powerups">
+              <li><span class="pu-glyph">✷</span><div><strong>Bomba</strong> — destruye un área 3×3 a su alrededor, aplica gravedad y suma puntos por cada bloque destruido.</div></li>
+              <li><span class="pu-glyph">↔ ↕</span><div><strong>Rayo</strong> — limpia la fila o la columna donde aterriza (la dirección se ve en el preview NEXT). La fila cuenta como línea real; la columna sólo destruye.</div></li>
+              <li><span class="pu-glyph">◆</span><div><strong>Tinte</strong> — convierte todos los bloques de un color en comodines (✦): cada comodín cubre un hueco al limpiar líneas.</div></li>
+              <li><span class="pu-glyph">⇩</span><div><strong>Gravedad</strong> — compacta todos los huecos del tablero hacia abajo, sin alterar el orden de los bloques.</div></li>
+              <li><span class="pu-glyph">❄</span><div><strong>Congelar</strong> — detiene la caída automática 5 segundos; los controles siguen funcionando.</div></li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <script src="audio.js"></script>
+  <script src="effects.js"></script>
+  <script src="powerups.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

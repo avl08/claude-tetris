@@ -4,6 +4,20 @@
 // update(dt) y draw(context, BLOCK) están separados a propósito: setTheme()
 // llama a draw() fuera del bucle de juego y no debe hacer avanzar el tiempo.
 
+// Paleta de colores de los efectos, sustituible en caliente por skins.js vía
+// Effects.setPalette() (llamado desde setSkin() en game.js). Los valores de
+// abajo son los originales "retro"; ninguna clase de efecto toca un literal
+// de color directamente, todas leen de aquí.
+let effectsPalette = {
+  ring: '#ffb74d',
+  particle: '#ff7043',
+  beam: '#4dd0e1',
+  flash: '#ffd54f',
+  streak: '#81c784',
+  freezeTint: '#4fc3f7',
+  freezeText: '#e1f5fe',
+};
+
 class Effect {
   constructor(duration) {
     this.t = 0;
@@ -39,7 +53,7 @@ class ExplosionEffect extends Effect {
     // anillo expansivo
     context.save();
     context.globalAlpha = 1 - p;
-    context.strokeStyle = '#ffb74d';
+    context.strokeStyle = effectsPalette.ring;
     context.lineWidth = 4 * (1 - p) + 1;
     context.beginPath();
     context.arc(px, py, p * BLOCK * 2.4, 0, Math.PI * 2);
@@ -49,7 +63,7 @@ class ExplosionEffect extends Effect {
     // partículas
     context.save();
     context.globalAlpha = 1 - p;
-    context.fillStyle = '#ff7043';
+    context.fillStyle = effectsPalette.particle;
     for (const part of this.particles) {
       const dist = part.speed * p * BLOCK * 2;
       const x = px + Math.cos(part.angle) * dist;
@@ -74,7 +88,7 @@ class BeamEffect extends Effect {
     const p = this.progress;
     context.save();
     context.globalAlpha = 1 - p;
-    context.fillStyle = '#4dd0e1';
+    context.fillStyle = effectsPalette.beam;
     if (this.dir === 'row') {
       const y = this.index * BLOCK;
       const h = BLOCK * (1 - p * 0.6);
@@ -97,7 +111,7 @@ class CellFlashEffect extends Effect {
     const p = this.progress;
     context.save();
     context.globalAlpha = 1 - p;
-    context.strokeStyle = '#ffd54f';
+    context.strokeStyle = effectsPalette.flash;
     context.lineWidth = 2;
     for (const { x, y } of this.cells) {
       const size = BLOCK * (0.5 + p * 0.6);
@@ -118,7 +132,7 @@ class FallStreakEffect extends Effect {
     const p = this.progress;
     context.save();
     context.globalAlpha = 1 - p;
-    context.strokeStyle = '#81c784';
+    context.strokeStyle = effectsPalette.streak;
     context.lineWidth = 3;
     for (const { x, y, dist } of this.cells) {
       const cx = (x + 0.5) * BLOCK;
@@ -145,14 +159,14 @@ class FreezeOverlayEffect extends Effect {
   draw(context, BLOCK) {
     context.save();
     context.globalAlpha = 0.14;
-    context.fillStyle = '#4fc3f7';
+    context.fillStyle = effectsPalette.freezeTint;
     context.fillRect(0, 0, this.cols * BLOCK, this.rows * BLOCK);
     context.restore();
 
     const seconds = Math.ceil(this.remainingMs / 1000);
     context.save();
     context.globalAlpha = 0.85;
-    context.fillStyle = '#e1f5fe';
+    context.fillStyle = effectsPalette.freezeText;
     context.font = 'bold 22px monospace';
     context.textAlign = 'center';
     context.fillText(`❄ ${seconds}`, (this.cols * BLOCK) / 2, 28);
@@ -211,5 +225,11 @@ const Effects = (() => {
     shakeT = 0;
   }
 
-  return { spawn, removeType, update, draw, shake, getShakeOffset, active, clear };
+  // Sustituye (parcial o totalmente) la paleta de colores de los efectos.
+  // Los campos omitidos conservan su valor anterior.
+  function setPalette(palette) {
+    effectsPalette = { ...effectsPalette, ...palette };
+  }
+
+  return { spawn, removeType, update, draw, shake, getShakeOffset, active, clear, setPalette };
 })();

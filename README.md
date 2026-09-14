@@ -23,6 +23,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [1. `index.html`](#1-indexhtml)
     - [2. `style.css`](#2-stylecss)
     - [3. `game.js` y el sistema de power-ups](#3-gamejs-y-el-sistema-de-power-ups)
+    - [Skins visuales (`skins.js`)](#skins-visuales-skinsjs)
     - [Flujo del juego](#flujo-del-juego)
   - [Tecnologías](#tecnologías)
   - [Estructura del proyecto](#estructura-del-proyecto)
@@ -49,6 +50,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Sonido** (efectos sintetizados, sin ficheros de audio) con botón de silenciar, y **tema claro/oscuro**.
 - **Tabla de récords local**: pantalla de inicio con el top 5 de puntuaciones, mejor combo y máximo de líneas conseguidas, guardado en `localStorage`. Al terminar la partida, si la puntuación entra en el top 5 se puede guardar con nombre; la fila nueva se resalta. Incluye botón para borrar todos los récords. Ver la sección dedicada más abajo.
+- **Skins visuales**: un selector bajo el de modo permite elegir entre **Retro** (el estilo plano de siempre), **Neón** (fondo negro con glow), **Pastel** (colores suaves, esquinas redondeadas) y **Pixel art** (textura a cuadros sobre cada bloque). Es un eje independiente del tema claro/oscuro — activar cualquier skin nunca rompe el tema, aunque algunas skins (p. ej. Neón) imponen su propio fondo oscuro por encima del tema elegido, ya que cada una define una "apariencia completa" — y la elección se guarda en `localStorage`.
 
 ---
 
@@ -160,8 +162,30 @@ Aporta el aspecto visual con estética _dark / retro arcade_: fondo oscuro, tipo
 El sistema de power-ups vive en tres scripts separados, desacoplados de `game.js`:
 
 - **`powerups.js`**: la clase base `PowerUp`, sus cinco subclases (`Bomb`, `LightningRow`, `LightningCol`, `Dye`, `GravityPowerUp`, `Freeze`) y `PowerUpRegistry`/`PowerUpSpawner`. Ninguna clase toca los globales de `game.js`: reciben un `powerUpContext` con primitivas acotadas (leer/escribir celdas, limpiar una fila/columna, aplicar gravedad, sumar puntuación, congelar...). Añadir un power-up nuevo es escribir la clase y registrarla al final de la lista en este archivo.
-- **`effects.js`**: capa de efectos visuales (explosión, haz del rayo, destello del tinte, estelas de gravedad, overlay del congelado), con `update(dt)` y `draw()` separados para no acoplarse al bucle del juego.
+- **`effects.js`**: capa de efectos visuales (explosión, haz del rayo, destello del tinte, estelas de gravedad, overlay del congelado), con `update(dt)` y `draw()` separados para no acoplarse al bucle del juego. Sus colores se leen de una paleta interna sustituible con `Effects.setPalette(...)`, que `setSkin()` llama cada vez que cambia la skin.
 - **`audio.js`**: efectos de sonido sintetizados con WebAudio (sin ficheros de audio), con silencio persistido en `localStorage`.
+- **`skins.js`**: sistema de skins visuales (ver más abajo), igual de desacoplado — expone `Skins.setActive/getActive/colorFor/paint`, y `game.js` sólo consulta esa API.
+
+### Skins visuales (`skins.js`)
+
+Eje **independiente** del tema claro/oscuro (`data-theme` / `tetris-theme` / `setTheme()`): las skins se controlan con el atributo `data-skin` en `<html>` y se persisten bajo la clave `tetris-skin`, así que ambos ejes se combinan sin conflicto (p. ej. Neón + modo claro).
+
+Cada skin define, en una tabla dentro de `skins.js`:
+
+- Una **paleta de colores** de pieza (posiciones 1-8, mismo formato que el `COLORS` original de `game.js`).
+- Una **estrategia de pintado** de bloque (`paint(ctx, x, y, size, fill, highlight)`), que sustituye únicamente el relleno del bloque — el glifo (comodín, power-up) lo sigue dibujando `drawBlock()` en `game.js` de forma genérica.
+- Una **paleta de colores para `effects.js`**, aplicada con `Effects.setPalette(...)`.
+
+Las cuatro skins:
+
+| Skin | Aspecto |
+| --- | --- |
+| **Retro** | El estilo plano original: relleno sólido + franja de brillo superior. |
+| **Neón** | Fondo casi negro y bloques con `shadowBlur`/`shadowColor` (glow), reseteado tras cada bloque para no filtrarse a la cuadrícula. |
+| **Pastel** | Colores suaves y esquinas redondeadas simuladas (`ctx.roundRect`, con reserva manual por arcos si el navegador no lo soporta). |
+| **Pixel** | Paleta saturada + una rejilla 3×3 a cuadros y contorno marcado sobre cada bloque, para simular una textura pixel art barata de dibujar. |
+
+`resolveCell()`/`colorHex()` en `game.js` consultan `Skins.colorFor(index)` en vez del array `COLORS` (que se conserva como referencia/valor por defecto de la skin Retro); `drawBlock()` delega el pintado del cuerpo del bloque en `Skins.paint(...)` manteniendo su firma y los cuatro puntos de llamada (tablero, ghost, pieza actual, preview `NEXT`) intactos. El comodín (`v === 9`) y las celdas de power-up (`v >= 100`) no pasan por la skin — siguen usando `themeColors.comodin` y `PowerUps.styleFor`/`puInstance.color` como antes.
 
 Y, en el mismo espíritu desacoplado, **`scores.js`** expone un objeto `Scores` con el almacenamiento del top 5 y los récords globales (mejor combo, máximo de líneas) en `localStorage`, más un pequeño helper para generar el HTML de la tabla — usado tanto por la pantalla de inicio como por el overlay de Game Over.
 
@@ -210,12 +234,13 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ```
 03-tetris/
 ├── index.html      # Estructura del DOM y los dos canvas
-├── style.css       # Estilos del juego (dark/light theme)
+├── style.css       # Estilos del juego (dark/light theme + skins visuales)
 ├── audio.js        # Efectos de sonido (WebAudio, sintetizados)
 ├── effects.js      # Capa de efectos visuales (explosiones, rayo, etc.)
 ├── powerups.js     # PowerUp (clase base) + las 5 piezas + registro + spawner
 ├── scores.js       # Tabla de récords local (top 5, mejor combo, máx. líneas) en localStorage
-├── game.js         # Lógica central del Tetris e integración con los power-ups
+├── skins.js        # Skins visuales (paletas de color + estrategias de pintado de bloque)
+├── game.js         # Lógica central del Tetris e integración con power-ups/skins
 └── README.md
 ```
 
@@ -234,6 +259,7 @@ Algunos parámetros fáciles de tunear:
 | `LINE_SCORES`          | `game.js`     | Puntos por 1, 2, 3 o 4 líneas eliminadas  | `[0,100,300,500,800]`    |
 | `dropInterval`         | `game.js`     | Velocidad inicial de caída en ms          | `1000`                   |
 | `POWERUP_CONFIG`       | `powerups.js` | Frecuencia y pesos de los power-ups       | `minGap:8, chance:0.15, maxGap:25` |
+| `SKIN_TABLE`           | `skins.js`    | Paleta de color + pintado de bloque por skin | `retro`, `neon`, `pastel`, `pixel` |
 
 > Si cambias `COLS`, `ROWS` o `BLOCK`, recuerda ajustar también `width` y `height` del `<canvas id="board">` en `index.html` para que coincida (`COLS × BLOCK` × `ROWS × BLOCK`).
 

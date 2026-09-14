@@ -18,6 +18,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
   - [Power-ups](#power-ups)
+  - [Tabla de récords](#tabla-de-récords)
   - [Cómo funciona](#cómo-funciona)
     - [1. `index.html`](#1-indexhtml)
     - [2. `style.css`](#2-stylecss)
@@ -47,6 +48,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Modal de ayuda** (botón `❓`): explica controles, puntuación, combos, los dos modos de juego y cada power-up. Pausa la partida mientras está abierto.
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Sonido** (efectos sintetizados, sin ficheros de audio) con botón de silenciar, y **tema claro/oscuro**.
+- **Tabla de récords local**: pantalla de inicio con el top 5 de puntuaciones, mejor combo y máximo de líneas conseguidas, guardado en `localStorage`. Al terminar la partida, si la puntuación entra en el top 5 se puede guardar con nombre; la fila nueva se resalta. Incluye botón para borrar todos los récords. Ver la sección dedicada más abajo.
 
 ---
 
@@ -111,9 +113,22 @@ La frecuencia con la que aparecen es configurable (`POWERUP_CONFIG` en `powerups
 
 ---
 
+## Tabla de récords
+
+El juego ya no arranca directamente: al cargar la página se muestra una **pantalla de inicio** con el top 5 de puntuaciones, el mejor combo y el máximo de líneas conseguidas hasta ahora, y un botón **Jugar** que arranca la partida.
+
+- Se guardan las **5 mejores puntuaciones**, cada una con nombre del jugador, puntuación, líneas, nivel, combo máximo de esa partida y modo (Clásico/Completo).
+- Al terminar la partida (**Game Over**), si la puntuación obtenida entra en el top 5 aparece un campo de texto para introducir el nombre (por defecto "Jugador") y un botón **Guardar**; la tabla se reordena y la fila nueva se resalta.
+- El **mejor combo** y el **máximo de líneas** se guardan aparte como récords globales (no sólo los de la puntuación ganadora) y se muestran tanto en la pantalla de inicio como en el overlay de Game Over.
+- El botón **Borrar récords** (en la pantalla de inicio) borra todo lo anterior tras confirmar, y refresca la tabla al momento.
+
+Todo se guarda en `localStorage` (clave `tetris-highscores` para el top 5, `tetris-best-combo` y `tetris-max-lines` para los récords globales) — persiste entre sesiones en el mismo navegador, pero es local a cada dispositivo/navegador, no hay servidor ni cuenta de usuario.
+
+---
+
 ## Cómo funciona
 
-El juego se compone de `index.html`, `style.css` y cuatro scripts que se cargan en este orden: `audio.js`, `effects.js`, `powerups.js`, `game.js`.
+El juego se compone de `index.html`, `style.css` y cinco scripts que se cargan en este orden: `audio.js`, `effects.js`, `powerups.js`, `scores.js`, `game.js`.
 
 ### 1. `index.html`
 
@@ -121,7 +136,8 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel lateral con `SCORE`, `LINES`, `LEVEL`, vista de la siguiente pieza y la lista de controles.
-- Un overlay para los estados **PAUSA** y **GAME OVER**.
+- Un overlay de **pantalla de inicio** (`#start-screen`, visible desde el arranque) con la tabla de récords y el botón **Jugar**.
+- Un overlay para los estados **PAUSA** y **GAME OVER**, este último con la tabla de récords y el formulario para guardar la puntuación.
 
 ### 2. `style.css`
 
@@ -147,9 +163,14 @@ El sistema de power-ups vive en tres scripts separados, desacoplados de `game.js
 - **`effects.js`**: capa de efectos visuales (explosión, haz del rayo, destello del tinte, estelas de gravedad, overlay del congelado), con `update(dt)` y `draw()` separados para no acoplarse al bucle del juego.
 - **`audio.js`**: efectos de sonido sintetizados con WebAudio (sin ficheros de audio), con silencio persistido en `localStorage`.
 
+Y, en el mismo espíritu desacoplado, **`scores.js`** expone un objeto `Scores` con el almacenamiento del top 5 y los récords globales (mejor combo, máximo de líneas) en `localStorage`, más un pequeño helper para generar el HTML de la tabla — usado tanto por la pantalla de inicio como por el overlay de Game Over.
+
 ### Flujo del juego
 
 ```
+pantalla de inicio (#start-screen, visible al cargar)
+  └─ botón "Jugar" → oculta #start-screen → init()
+
 init()
   ├─ createBoard()                  → matriz vacía
   ├─ next = nextPiece()             → ¿toca power-up? si no, randomPiece()
@@ -160,14 +181,14 @@ init()
      ├─ acumula dt (si no está congelado)
      ├─ si dt ≥ dropInterval → baja la pieza o llama a lockPiece()
      │     lockPiece(): merge → activatePowerUp (si aplica) → clearLines →
-     │                  registerCombo → spawn
+     │                  registerCombo (captura el mejor combo) → spawn
      ├─ Effects.update(dt) + draw()  (grid + tablero + ghost + pieza + efectos)
      └─ requestAnimationFrame(loop)
 
    keydown → mover / rotar / soft-drop / hard-drop / pausa
 ```
 
-Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()` y se muestra el overlay de **Game Over**.
+Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()`, que actualiza el récord de líneas, muestra el overlay de **Game Over** con la tabla de récords y, si la puntuación entra en el top 5, el formulario para guardarla con nombre.
 
 ---
 
@@ -193,6 +214,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── audio.js        # Efectos de sonido (WebAudio, sintetizados)
 ├── effects.js      # Capa de efectos visuales (explosiones, rayo, etc.)
 ├── powerups.js     # PowerUp (clase base) + las 5 piezas + registro + spawner
+├── scores.js       # Tabla de récords local (top 5, mejor combo, máx. líneas) en localStorage
 ├── game.js         # Lógica central del Tetris e integración con los power-ups
 └── README.md
 ```

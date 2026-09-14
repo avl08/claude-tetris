@@ -79,10 +79,36 @@
       </div>
     </div>
 
+    <div id="start-screen" class="overlay">
+      <div class="overlay-box start-box">
+        <p class="start-title">TETRIS</p>
+        <div class="bests-row">
+          <span>Mejor combo: <strong id="start-best-combo">—</strong></span>
+          <span>Máx. líneas: <strong id="start-max-lines">—</strong></span>
+        </div>
+        <div class="score-table-wrap" id="start-scores"></div>
+        <div class="start-actions">
+          <button id="start-play-btn" class="primary-btn" type="button">Jugar</button>
+          <button id="start-reset-btn" class="danger-btn" type="button">Borrar récords</button>
+        </div>
+      </div>
+    </div>
+
     <div id="overlay" class="overlay hidden">
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <div id="overlay-extra">
+          <div class="bests-row">
+            <span>Mejor combo: <strong id="overlay-best-combo">—</strong></span>
+            <span>Máx. líneas: <strong id="overlay-max-lines">—</strong></span>
+          </div>
+          <div class="score-table-wrap" id="overlay-scores"></div>
+          <div class="save-score-row hidden" id="save-score-row">
+            <input type="text" id="save-score-name" maxlength="16" placeholder="Jugador" autocomplete="off" />
+            <button id="save-score-btn" class="primary-btn" type="button">Guardar</button>
+          </div>
+        </div>
         <button id="restart-btn">Reiniciar</button>
       </div>
     </div>
@@ -135,6 +161,7 @@
   <script src="audio.js"></script>
   <script src="effects.js"></script>
   <script src="powerups.js"></script>
+  <script src="scores.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

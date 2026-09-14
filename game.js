@@ -52,6 +52,19 @@ const helpCloseBtn = document.getElementById('help-close');
 const helpModal = document.getElementById('help-modal');
 const modeClassicBtn = document.getElementById('mode-classic-btn');
 const modeFullBtn = document.getElementById('mode-full-btn');
+const startScreen = document.getElementById('start-screen');
+const startPlayBtn = document.getElementById('start-play-btn');
+const startResetBtn = document.getElementById('start-reset-btn');
+const startScoresEl = document.getElementById('start-scores');
+const startBestComboEl = document.getElementById('start-best-combo');
+const startMaxLinesEl = document.getElementById('start-max-lines');
+const overlayExtra = document.getElementById('overlay-extra');
+const overlayBestComboEl = document.getElementById('overlay-best-combo');
+const overlayMaxLinesEl = document.getElementById('overlay-max-lines');
+const overlayScoresEl = document.getElementById('overlay-scores');
+const saveScoreRow = document.getElementById('save-score-row');
+const saveScoreName = document.getElementById('save-score-name');
+const saveScoreBtn = document.getElementById('save-score-btn');
 
 const THEME_STORAGE_KEY = 'tetris-theme';
 const MODE_STORAGE_KEY = 'tetris-mode';
@@ -59,7 +72,12 @@ const themeColors = { gridLine: '', blockHighlight: '', comodin: '' };
 let gameMode = 'full'; // 'classic' | 'full'
 
 let board, current, next, score, lines, level, combo, freezeRemaining,
-  paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+  paused, gameOver, lastTime, dropAccum, dropInterval, animId, runBestCombo;
+
+// Bloquea el bucle/los controles (incluidos los botones táctiles, que
+// llaman a moveLeft/rotate/etc. directamente y no pasan por el listener de
+// teclado) hasta que se pulse "Jugar" en la pantalla de inicio.
+gameOver = true;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -185,6 +203,11 @@ function activatePowerUp(piece) {
 function registerCombo(clearedCount) {
   if (clearedCount > 0) {
     combo++;
+    // Se captura aquí, no al terminar la partida: `combo` vuelve a 0 en el
+    // `else` de abajo en el siguiente lock que no limpie línea, así que leerlo
+    // más tarde (p. ej. en endGame) ya sería tarde.
+    runBestCombo = Math.max(runBestCombo, combo);
+    Scores.updateBestCombo(combo);
     if (combo > 1) score += 50 * (combo - 1) * level;
   } else {
     combo = 0;
@@ -496,6 +519,24 @@ function doHardDrop() {
   updateHUD();
 }
 
+// Refleja los mejores globales persistidos (no los de esta partida) en un
+// par de elementos <strong>; se usa tanto en la pantalla de inicio como en
+// el overlay de game over.
+function renderBests(comboEl, linesEl) {
+  comboEl.textContent = Scores.getBestCombo() || '—';
+  linesEl.textContent = Scores.getMaxLines() || '—';
+}
+
+function renderStartScreen() {
+  renderBests(startBestComboEl, startMaxLinesEl);
+  startScoresEl.innerHTML = Scores.renderTableHTML(Scores.getScores());
+}
+
+function renderGameOverScores(highlightIndex = -1, list = Scores.getScores()) {
+  renderBests(overlayBestComboEl, overlayMaxLinesEl);
+  overlayScoresEl.innerHTML = Scores.renderTableHTML(list, highlightIndex);
+}
+
 function endGame() {
   gameOver = true;
   stopRepeat();
@@ -505,8 +546,32 @@ function endGame() {
   draw(); // frame final inmediato: sin la pieza que colisionó
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+
+  Scores.updateMaxLines(lines); // `lines` sólo se resetea en init(), es seguro leerlo aquí
+  renderGameOverScores();
+  if (Scores.qualifies(score)) {
+    saveScoreName.value = '';
+    saveScoreRow.classList.remove('hidden');
+  } else {
+    saveScoreRow.classList.add('hidden');
+  }
+
+  overlayExtra.classList.remove('hidden');
   overlay.classList.remove('hidden');
 }
+
+saveScoreBtn.addEventListener('click', () => {
+  const { list, index } = Scores.addScore({
+    name: saveScoreName.value,
+    score,
+    lines,
+    level,
+    combo: runBestCombo,
+    mode: gameMode,
+  });
+  renderGameOverScores(index, list);
+  saveScoreRow.classList.add('hidden');
+});
 
 function togglePause() {
   if (gameOver) return;
@@ -520,6 +585,9 @@ function togglePause() {
     cancelAnimationFrame(animId);
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
+    // La tabla de récords/guardado es sólo para game over; el propio
+    // #overlay sigue siendo compartido con la pausa por ahora.
+    overlayExtra.classList.add('hidden');
     overlay.classList.remove('hidden');
   }
 }
@@ -565,6 +633,7 @@ function init() {
   lines = 0;
   level = 1;
   combo = 0;
+  runBestCombo = 0;
   freezeRemaining = 0;
   paused = false;
   gameOver = false;
@@ -610,7 +679,10 @@ function closeHelp() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.target instanceof HTMLButtonElement) return;
+  // Además de los botones, exime los campos de texto (p. ej. el nombre al
+  // guardar un récord) para que escribir no dispare pausa (KeyP) ni hard
+  // drop (Space) mientras el usuario está tecleando.
+  if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLInputElement || e.target.isContentEditable) return;
   if (isHelpOpen()) {
     if (e.code === 'Escape') closeHelp();
     return;
@@ -716,4 +788,22 @@ try {
 } catch {
   setMode('full', { restart: false });
 }
-init();
+
+// --- Pantalla de inicio ---
+// El juego ya no arranca solo: init() queda a la espera de "Jugar". Hasta
+// entonces gameOver ya está a true (ver declaración de estado más arriba),
+// así que moveLeft/rotate/etc. (llamados directamente por los botones
+// táctiles, sin pasar por el listener de teclado) se rechazan sin tocar
+// `board`/`current`, que todavía no existen.
+renderStartScreen();
+
+startPlayBtn.addEventListener('click', () => {
+  startScreen.classList.add('hidden');
+  init();
+});
+
+startResetBtn.addEventListener('click', () => {
+  if (!confirm('¿Borrar todos los récords guardados?')) return;
+  Scores.resetAll();
+  renderStartScreen();
+});

@@ -28,6 +28,11 @@ const PIECES = [
   [[8,8,8],[8,0,8],[8,8,8]],                  // Tuerca (3x3, hueco central)
 ];
 
+// La skin "retro" (skins.js) reutiliza este mismo array por referencia en
+// vez de duplicar sus valores, para que ambas paletas no puedan divergir si
+// alguien edita COLORS aquí sin saber que skins.js tiene su propia copia.
+Skins.get('retro').colors = COLORS;
+
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
 const canvas = document.getElementById('board');
@@ -52,9 +57,16 @@ const helpCloseBtn = document.getElementById('help-close');
 const helpModal = document.getElementById('help-modal');
 const modeClassicBtn = document.getElementById('mode-classic-btn');
 const modeFullBtn = document.getElementById('mode-full-btn');
+const skinButtons = {
+  retro: document.getElementById('skin-retro-btn'),
+  neon: document.getElementById('skin-neon-btn'),
+  pastel: document.getElementById('skin-pastel-btn'),
+  pixel: document.getElementById('skin-pixel-btn'),
+};
 
 const THEME_STORAGE_KEY = 'tetris-theme';
 const MODE_STORAGE_KEY = 'tetris-mode';
+const SKIN_STORAGE_KEY = 'tetris-skin';
 const themeColors = { gridLine: '', blockHighlight: '', comodin: '' };
 let gameMode = 'full'; // 'classic' | 'full'
 
@@ -105,7 +117,7 @@ function forEachCell(fn) {
 }
 
 function colorHex(index) {
-  return COLORS[index];
+  return Skins.colorFor(index);
 }
 
 function addScore(points) {
@@ -338,18 +350,14 @@ function resolveCell(v, puInstance) {
     return PowerUps.styleFor(v - 100);
   }
   if (v === 9) return { fill: themeColors.comodin, glyph: '✦' };
-  return { fill: COLORS[v], glyph: null };
+  return { fill: Skins.colorFor(v), glyph: null };
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha, puInstance) {
   if (!colorIndex) return;
   const style = resolveCell(colorIndex, puInstance);
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = style.fill;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = themeColors.blockHighlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  Skins.paint(context, x, y, size, style.fill, themeColors.blockHighlight);
   if (style.glyph) {
     const cx = x * size + size / 2;
     const cy = y * size + size / 2 + 1;
@@ -451,6 +459,27 @@ function setTheme(theme) {
 function toggleTheme() {
   const isLight = document.documentElement.dataset.theme === 'light';
   setTheme(isLight ? 'dark' : 'light');
+}
+
+// Eje independiente del tema claro/oscuro de arriba: cambia la paleta de
+// colores de las piezas y la estrategia de pintado de bloque (ver skins.js),
+// más la paleta de effects.js. Se puede combinar con cualquier data-theme.
+function setSkin(skin) {
+  const active = Skins.setActive(skin);
+  document.documentElement.dataset.skin = active.id;
+  try {
+    localStorage.setItem(SKIN_STORAGE_KEY, active.id);
+  } catch {
+    // ver comentario sobre localStorage en navegación privada más arriba
+  }
+  Skins.ORDER.forEach(id => {
+    const btn = skinButtons[id];
+    if (btn) btn.setAttribute('aria-pressed', String(id === active.id));
+  });
+  Effects.setPalette(active.effects);
+  readThemeColors();
+  if (current) draw();
+  if (next) drawNext();
 }
 
 function setMode(mode, { restart = true } = {}) {
@@ -650,6 +679,11 @@ helpModal.addEventListener('click', e => {
 modeClassicBtn.addEventListener('click', () => setMode('classic'));
 modeFullBtn.addEventListener('click', () => setMode('full'));
 
+Skins.ORDER.forEach(id => {
+  const btn = skinButtons[id];
+  if (btn) btn.addEventListener('click', () => setSkin(id));
+});
+
 function updateSoundButton() {
   const muted = Sfx.isMuted();
   soundToggleBtn.setAttribute('aria-pressed', String(!muted));
@@ -710,6 +744,11 @@ try {
   setTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
 } catch {
   setTheme('dark');
+}
+try {
+  setSkin(localStorage.getItem(SKIN_STORAGE_KEY) || 'retro');
+} catch {
+  setSkin('retro');
 }
 try {
   setMode(localStorage.getItem(MODE_STORAGE_KEY) === 'classic' ? 'classic' : 'full', { restart: false });

@@ -45,6 +45,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Power-ups aleatorios**: de vez en cuando, en vez de una pieza normal, cae una pieza especial de 1×1 que se activa al colocarse. Ver la sección dedicada más abajo.
 - **Modo Clásico / Completo**: un selector bajo el título permite jugar el Tetris de siempre (sin power-ups) o la versión completa con power-ups. Cambiar de modo reinicia la partida.
 - **Modal de ayuda** (botón `❓`): explica controles, puntuación, combos, los dos modos de juego y cada power-up. Pausa la partida mientras está abierto.
+- **Menú de pausa** (`P` o `Escape`): overlay con **Reanudar**, **Reiniciar** (nueva partida sin recargar la página), **Ver controles** (abre el modal de ayuda sin perder la pausa) y un selector de **nivel inicial** (1–10, se recuerda entre partidas) para la próxima partida. Mientras está abierto, el teclado no mueve piezas.
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Sonido** (efectos sintetizados, sin ficheros de audio) con botón de silenciar, y **tema claro/oscuro**.
 
@@ -89,7 +90,7 @@ Después abre `http://localhost:8000` en el navegador.
 | `↑` o `X` | Rotar la pieza en sentido horario |
 | `↓`       | Soft drop (bajar más rápido)      |
 | `Espacio` | Hard drop (caída instantánea)     |
-| `P`       | Pausar / reanudar                 |
+| `P` / `Esc` | Pausar / reanudar (abre el menú de pausa) |
 
 En móvil (Safari, Chrome, Firefox) se muestra automáticamente un panel de botones táctiles equivalente: ◀ / ▶ para mover, ⟳ para rotar, ▽ para soft drop, ⤓ para hard drop y ❚❚ para pausa. Mantener pulsado ◀, ▶ o ▽ repite la acción.
 
@@ -113,7 +114,7 @@ La frecuencia con la que aparecen es configurable (`POWERUP_CONFIG` en `powerups
 
 ## Cómo funciona
 
-El juego se compone de `index.html`, `style.css` y cuatro scripts que se cargan en este orden: `audio.js`, `effects.js`, `powerups.js`, `game.js`.
+El juego se compone de `index.html`, `style.css` y cinco scripts que se cargan en este orden: `audio.js`, `effects.js`, `powerups.js`, `pausemenu.js`, `game.js`.
 
 ### 1. `index.html`
 
@@ -146,6 +147,8 @@ El sistema de power-ups vive en tres scripts separados, desacoplados de `game.js
 - **`powerups.js`**: la clase base `PowerUp`, sus cinco subclases (`Bomb`, `LightningRow`, `LightningCol`, `Dye`, `GravityPowerUp`, `Freeze`) y `PowerUpRegistry`/`PowerUpSpawner`. Ninguna clase toca los globales de `game.js`: reciben un `powerUpContext` con primitivas acotadas (leer/escribir celdas, limpiar una fila/columna, aplicar gravedad, sumar puntuación, congelar...). Añadir un power-up nuevo es escribir la clase y registrarla al final de la lista en este archivo.
 - **`effects.js`**: capa de efectos visuales (explosión, haz del rayo, destello del tinte, estelas de gravedad, overlay del congelado), con `update(dt)` y `draw()` separados para no acoplarse al bucle del juego.
 - **`audio.js`**: efectos de sonido sintetizados con WebAudio (sin ficheros de audio), con silencio persistido en `localStorage`.
+
+El menú de pausa vive aparte en **`pausemenu.js`** (objeto `PauseMenu`), con el mismo patrón de desacoplo: expone `init(callbacks)`, `open()`, `close()`, `isOpen()` y `getStartLevel()`, y `game.js` sólo llama a esas funciones desde `togglePause()`/`init()`/el listener de teclado. El nivel inicial elegido se guarda en `localStorage` (`tetris-start-level`) y sólo se aplica a la *siguiente* partida (`init()` lo lee una vez al arrancar).
 
 ### Flujo del juego
 
@@ -193,6 +196,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── audio.js        # Efectos de sonido (WebAudio, sintetizados)
 ├── effects.js      # Capa de efectos visuales (explosiones, rayo, etc.)
 ├── powerups.js     # PowerUp (clase base) + las 5 piezas + registro + spawner
+├── pausemenu.js    # Menú de pausa (Reanudar/Reiniciar/Ver controles/Nivel inicial)
 ├── game.js         # Lógica central del Tetris e integración con los power-ups
 └── README.md
 ```

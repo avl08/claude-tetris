@@ -67,7 +67,7 @@
             <li><kbd>↑</kbd> rotar</li>
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
-            <li><kbd>P</kbd> pausa</li>
+            <li><kbd>P</kbd> / <kbd>Esc</kbd> pausa</li>
           </ul>
         </div>
       </aside>
@@ -120,6 +120,21 @@
       </div>
     </div>
 
+    <div id="pause-menu" class="overlay hidden" tabindex="-1">
+      <div class="pause-box">
+        <p id="pause-title">PAUSA</p>
+        <div class="pause-actions">
+          <button id="pause-resume-btn" type="button">Reanudar</button>
+          <button id="pause-restart-btn" type="button">Reiniciar</button>
+          <button id="pause-controls-btn" type="button">Ver controles</button>
+        </div>
+        <div class="pause-level">
+          <label for="start-level-input">Nivel inicial</label>
+          <input id="start-level-input" type="number" min="1" max="10" step="1" value="1" inputmode="numeric" />
+        </div>
+      </div>
+    </div>
+
     <div id="help-modal" class="overlay hidden">
       <div class="help-box">
         <div class="help-header">
@@ -135,8 +150,13 @@
               <li><kbd>↑</kbd> / <kbd>X</kbd> rotar</li>
               <li><kbd>↓</kbd> bajada suave</li>
               <li><kbd>Space</kbd> caída instantánea</li>
-              <li><kbd>P</kbd> pausa</li>
+              <li><kbd>P</kbd> / <kbd>Esc</kbd> pausa</li>
             </ul>
+          </section>
+
+          <section>
+            <h3>Menú de pausa</h3>
+            <p>Al pausar (<kbd>P</kbd> o <kbd>Esc</kbd>) se abre un menú con <strong>Reanudar</strong>, <strong>Reiniciar</strong> (empieza una partida nueva sin recargar la página), <strong>Ver controles</strong> (abre esta ayuda sin perder la pausa) y un selector de <strong>nivel inicial</strong> (1–10) para la próxima partida, que se recuerda entre sesiones. Mientras el menú está abierto, el teclado y los controles táctiles no mueven la pieza.</p>
           </section>
 
           <section>
@@ -170,6 +190,7 @@
   <script src="powerups.js"></script>
   <script src="scores.js"></script>
   <script src="skins.js"></script>
+  <script src="pausemenu.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

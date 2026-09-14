@@ -392,6 +392,108 @@ kbd {
   color: var(--accent);
 }
 
+/* ---- Menú de pausa ---- */
+/* El overlay recibe el foco al abrirse (ver pausemenu.js) sólo para que Tab
+   entre directamente a "Reanudar"; no debe dibujar su propio anillo de foco
+   alrededor de todo el tablero. */
+#pause-menu:focus {
+  outline: none;
+}
+
+.pause-box {
+  width: 100%;
+  max-width: 260px;
+  background: var(--board-bg);
+  border: 1px solid var(--board-border);
+  border-radius: 8px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+#pause-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--accent);
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.pause-actions button {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: background 0.15s;
+}
+
+.pause-actions button:hover {
+  background: var(--accent-hover);
+}
+
+.pause-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#pause-controls-btn {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--board-border);
+}
+
+#pause-controls-btn:hover {
+  background: transparent;
+  border-color: var(--accent);
+}
+
+.pause-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.pause-level label {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--label);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+#start-level-input {
+  width: 56px;
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+#start-level-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ---- Modal de ayuda ---- */
 .help-box {
   width: 100%;

@@ -84,7 +84,7 @@ const themeColors = { gridLine: '', blockHighlight: '', comodin: '' };
 let gameMode = 'full'; // 'classic' | 'full'
 
 let board, current, next, score, lines, level, combo, freezeRemaining,
-  paused, gameOver, lastTime, dropAccum, dropInterval, animId, runBestCombo;
+  paused, gameOver, lastTime, dropAccum, dropInterval, animId, runBestCombo, startLevel;
 
 // Bloquea el bucle/los controles (incluidos los botones táctiles, que
 // llaman a moveLeft/rotate/etc. directamente y no pasan por el listener de
@@ -286,7 +286,7 @@ function applyLinesCleared(count, comodines = 0) {
   const base = (LINE_SCORES[Math.min(count, 4)] || 0) * level;
   const bonus = comodines > 0 ? Math.round(base * 0.5 * comodines) : 0;
   score += base + bonus;
-  level = Math.floor(lines / 10) + 1;
+  level = startLevel + Math.floor(lines / 10);
   dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   updateHUD();
 }
@@ -606,18 +606,13 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
-    overlay.classList.add('hidden');
+    PauseMenu.close();
     lastTime = performance.now();
     loop(lastTime);
   } else {
-    stopRepeat();
+    stopRepeat(); // evita que un botón táctil mantenido siga repitiendo bajo el menú
     cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    // La tabla de récords/guardado es sólo para game over; el propio
-    // #overlay sigue siendo compartido con la pausa por ahora.
-    overlayExtra.classList.add('hidden');
-    overlay.classList.remove('hidden');
+    PauseMenu.open();
   }
 }
 
@@ -660,13 +655,16 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  // Congelado al arrancar la partida: cambiar el selector del menú de pausa
+  // durante una partida en curso no le afecta, sólo a la siguiente.
+  startLevel = PauseMenu.getStartLevel();
+  level = startLevel;
   combo = 0;
   runBestCombo = 0;
   freezeRemaining = 0;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = Math.max(100, 1000 - (startLevel - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
   PowerUpSpawner.reset();
@@ -675,6 +673,7 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  PauseMenu.close();
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -716,7 +715,10 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Escape') closeHelp();
     return;
   }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  // togglePause() already flips on `paused`, and `paused` is true exactly
+  // while the pause menu is open — so this single check both opens it and
+  // (via KeyP/Escape again) closes it; no separate PauseMenu.isOpen() branch needed.
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -741,6 +743,12 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
+
+PauseMenu.init({
+  onResume: () => togglePause(),
+  onRestart: () => init(),
+  onControls: () => openHelp(),
+});
 
 helpToggleBtn.addEventListener('click', openHelp);
 helpCloseBtn.addEventListener('click', closeHelp);

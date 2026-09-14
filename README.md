@@ -47,6 +47,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Power-ups aleatorios**: de vez en cuando, en vez de una pieza normal, cae una pieza especial de 1×1 que se activa al colocarse. Ver la sección dedicada más abajo.
 - **Modo Clásico / Completo**: un selector bajo el título permite jugar el Tetris de siempre (sin power-ups) o la versión completa con power-ups. Cambiar de modo reinicia la partida.
 - **Modal de ayuda** (botón `❓`): explica controles, puntuación, combos, los dos modos de juego y cada power-up. Pausa la partida mientras está abierto.
+- **Menú de pausa** (`P` o `Escape`): overlay con **Reanudar**, **Reiniciar** (nueva partida sin recargar la página), **Ver controles** (abre el modal de ayuda sin perder la pausa) y un selector de **nivel inicial** (1–10, se recuerda entre partidas) para la próxima partida. Mientras está abierto, el teclado no mueve piezas.
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Sonido** (efectos sintetizados, sin ficheros de audio) con botón de silenciar, y **tema claro/oscuro**.
 - **Tabla de récords local**: pantalla de inicio con el top 5 de puntuaciones, mejor combo y máximo de líneas conseguidas, guardado en `localStorage`. Al terminar la partida, si la puntuación entra en el top 5 se puede guardar con nombre; la fila nueva se resalta. Incluye botón para borrar todos los récords. Ver la sección dedicada más abajo.
@@ -93,7 +94,7 @@ Después abre `http://localhost:8000` en el navegador.
 | `↑` o `X` | Rotar la pieza en sentido horario |
 | `↓`       | Soft drop (bajar más rápido)      |
 | `Espacio` | Hard drop (caída instantánea)     |
-| `P`       | Pausar / reanudar                 |
+| `P` / `Esc` | Pausar / reanudar (abre el menú de pausa) |
 
 En móvil (Safari, Chrome, Firefox) se muestra automáticamente un panel de botones táctiles equivalente: ◀ / ▶ para mover, ⟳ para rotar, ▽ para soft drop, ⤓ para hard drop y ❚❚ para pausa. Mantener pulsado ◀, ▶ o ▽ repite la acción.
 
@@ -130,7 +131,7 @@ Todo se guarda en `localStorage` (clave `tetris-highscores` para el top 5, `tetr
 
 ## Cómo funciona
 
-El juego se compone de `index.html`, `style.css` y cinco scripts que se cargan en este orden: `audio.js`, `effects.js`, `powerups.js`, `scores.js`, `game.js`.
+El juego se compone de `index.html`, `style.css` y siete scripts que se cargan en este orden: `audio.js`, `effects.js`, `powerups.js`, `scores.js`, `skins.js`, `pausemenu.js`, `game.js`.
 
 ### 1. `index.html`
 
@@ -139,7 +140,8 @@ Define la estructura visual:
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel lateral con `SCORE`, `LINES`, `LEVEL`, vista de la siguiente pieza y la lista de controles.
 - Un overlay de **pantalla de inicio** (`#start-screen`, visible desde el arranque) con la tabla de récords y el botón **Jugar**.
-- Un overlay para los estados **PAUSA** y **GAME OVER**, este último con la tabla de récords y el formulario para guardar la puntuación.
+- Un overlay para **GAME OVER**, con la tabla de récords y el formulario para guardar la puntuación.
+- Un **menú de pausa** independiente (`#pause-menu`) con reanudar, reiniciar, ver controles y el selector de nivel inicial.
 
 ### 2. `style.css`
 
@@ -188,6 +190,8 @@ Las cuatro skins:
 `resolveCell()`/`colorHex()` en `game.js` consultan `Skins.colorFor(index)` en vez del array `COLORS` (que se conserva como referencia/valor por defecto de la skin Retro); `drawBlock()` delega el pintado del cuerpo del bloque en `Skins.paint(...)` manteniendo su firma y los cuatro puntos de llamada (tablero, ghost, pieza actual, preview `NEXT`) intactos. El comodín (`v === 9`) y las celdas de power-up (`v >= 100`) no pasan por la skin — siguen usando `themeColors.comodin` y `PowerUps.styleFor`/`puInstance.color` como antes.
 
 Y, en el mismo espíritu desacoplado, **`scores.js`** expone un objeto `Scores` con el almacenamiento del top 5 y los récords globales (mejor combo, máximo de líneas) en `localStorage`, más un pequeño helper para generar el HTML de la tabla — usado tanto por la pantalla de inicio como por el overlay de Game Over.
+
+El menú de pausa vive aparte en **`pausemenu.js`** (objeto `PauseMenu`), con el mismo patrón de desacoplo: expone `init(callbacks)`, `open()`, `close()`, `isOpen()` y `getStartLevel()`, y `game.js` sólo llama a esas funciones desde `togglePause()`/`init()`/el listener de teclado. El nivel inicial elegido se guarda en `localStorage` (`tetris-start-level`) y sólo se aplica a la *siguiente* partida (`init()` lo lee una vez al arrancar).
 
 ### Flujo del juego
 
@@ -240,6 +244,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── powerups.js     # PowerUp (clase base) + las 5 piezas + registro + spawner
 ├── scores.js       # Tabla de récords local (top 5, mejor combo, máx. líneas) en localStorage
 ├── skins.js        # Skins visuales (paletas de color + estrategias de pintado de bloque)
+├── pausemenu.js    # Menú de pausa (Reanudar/Reiniciar/Ver controles/Nivel inicial)
 ├── game.js         # Lógica central del Tetris e integración con power-ups/skins
 └── README.md
 ```
